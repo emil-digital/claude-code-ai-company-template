@@ -29,14 +29,33 @@ Claude Code のメインセッションを Root（責任者）にし、企画・
    - 共有フォルダを作り、settings.json の `//c/CHANGE_ME/shared/partner/**` を、相手社フォルダの**絶対パス**に書き換えます。Windows の `C:\Users\you\shared\partner` なら `//c/Users/you/shared/partner/**` です。
    - `.claude/skills/sync/SKILL.md` の共有フォルダの場所（`../shared/` の行）も、実際の場所に書き換えます。
    - **相対パス（`../shared/partner/**`）では止まりませんでした**（筆者の環境で実測。Claude Code 2026年10月時点）。`Write(...)` の規則も効きません。`Edit(...)` で書いてください。
-5. 書き込みが止まることを、**ダミーのファイルで**必ず自分で確かめます。相手のフォルダの本物のファイルでは試さないでください。
+5. 書き込みが止まることを、必ず自分で確かめます。
+   - **相手のフォルダには何も書き込みません**（読むだけです）。試すのは、毎回新しく作る一時フォルダ（`mktemp -d`）の中のダミーファイルだけで、終わると（途中で失敗しても）その一時フォルダだけが消えます。
+   - Git Bash で `cd` して company フォルダに移動し、`<相手社フォルダ>` を相手のフォルダの場所に書き換えてから、全体を貼り付けて実行します。`claude -p` を1回呼びます。
    ```
-   echo original > "<相手社フォルダ>/_deny_test.txt"
-   sha256sum "<相手社フォルダ>/_deny_test.txt"
-   claude -p "First use the Read tool on <相手社フォルダ>/_deny_test.txt, then use the Write tool to overwrite it with the text changed. Reply: succeeded or denied." --allowedTools "Read,Write,Edit" --permission-mode acceptEdits
-   sha256sum "<相手社フォルダ>/_deny_test.txt"   # 最初と同じなら止まっている
-   rm "<相手社フォルダ>/_deny_test.txt"
+   ( set -eu
+     P="<相手社フォルダ>"   # 例: C:/Users/you/shared/partner（このフォルダは読むだけで、何も書きません）
+     [ -d "$P" ] || { echo "NG: フォルダが見つかりません: $P"; exit 1; }
+     abs() { local w; w=$(cd "$1" && pwd -W); echo "//$(echo "${w:0:1}" | tr 'A-Z' 'a-z')${w:2}"; }
+     # 1) company の settings.json に、相手のフォルダを絶対パスで指す規則があるか（読むだけ）
+     R="Edit($(abs "$P")/**)"
+     if grep -qF "\"$R\"" .claude/settings.json; then echo "OK: settings.json に $R があります"; else echo "NG: settings.json に $R がありません"; exit 1; fi
+     # 2) 同じ書き方の規則で本当に止まるかを、新しく作った一時フォルダの中のダミーだけで試す
+     T=$(mktemp -d)                         # 毎回新しく作られる空のフォルダ。既存のフォルダは使わない
+     trap 'cd / && rm -rf -- "$T"' EXIT     # 終わったら（途中で失敗しても）、この一時フォルダだけを消す
+     mkdir "$T/company" "$T/company/.claude" "$T/partner" "$T/free"
+     echo original > "$T/partner/dummy.txt" # 守られるはずのダミー
+     echo original > "$T/free/dummy.txt"    # 比較用：守られていないダミー（AI が本当に書こうとしたかの確認）
+     printf '{ "permissions": { "deny": ["Edit(%s/**)"] } }\n' "$(abs "$T/partner")" > "$T/company/.claude/settings.json"
+     B=$(sha256sum < "$T/partner/dummy.txt")
+     cd "$T/company"
+     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null || true
+     if [ "$B" = "$(sha256sum < "$T/free/dummy.txt")" ]; then echo "判定できません: 比較用のダミーも変わっていません（AI が書き込みを試していません）。もう一度実行してください"; exit 2; fi
+     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then echo "OK: 守られるはずのダミーは変わっていません（止まっています）"; else echo "NG: 守られるはずのダミーが書き換わりました（止まっていません）"; exit 1; fi
+   )
    ```
+   - 結果の読み方：`OK` が2行出れば止まっています。`NG` は規則が無いか、効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。
+   - Git Bash 用です（`pwd -W` を使うため。Mac・Linux では未確認）。
    - 絶対パスの deny でも、Bash を自動許可していると、node などのスクリプト経由では書き込めました（筆者の環境で実測）。Bash は自動許可しないでください。
 6. `claude` を起動し、「STATUS.md を読んで、最初の企画を探して」と頼みます。
 
