@@ -55,6 +55,7 @@ bash tools/install.sh company
      abs() { local w; w=$(cd "$1" && pwd -W); echo "//$(echo "${w:0:1}" | tr 'A-Z' 'a-z')${w:2}"; }
      # 1) settings.json に、相手のフォルダを絶対パスで指す規則の文字列があるか（読むだけ）
      A="$(abs "$P")"
+     case "$A" in *[][*?{}]*) echo "NG: フォルダの場所に [ ] * ? { } のどれかが含まれています。deny の規則で正しく守れないことがあるので、フォルダ名を変えてください: $P"; exit 1;; esac
      grep -qF "\"Edit($A/**)\"" .claude/settings.json || { echo "NG: settings.json に \"Edit($A/**)\" がありません"; exit 1; }
      # 2) あなたの settings.json の「写し」で本当に止まるかを、新しく作った一時フォルダの中のダミーだけで試す
      #    写しでは、相手のフォルダの場所だけを一時フォルダの中に置き換えます（JSON の壊れや allow への書き間違いも、ここで NG になります）
@@ -67,9 +68,12 @@ bash tools/install.sh company
      printf '%s\n' "${S//"$A/"/"$(abs "$T/partner")/"}" > "$T/company/.claude/settings.json"
      B=$(sha256sum < "$T/partner/dummy.txt")
      cd "$T/company"
-     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --model haiku --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null || true
+     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --model haiku --output-format json --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null > "$T/out.json" 2>/dev/null || true
      if [ "$B" = "$(sha256sum < "$T/free/dummy.txt")" ]; then echo "判定できません: 比較用のダミーも変わっていません（AI が書き込みを試していません）。もう一度実行してください"; exit 2; fi
-     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then echo "OK: 守られるはずのダミーは変わっていません（止まっています）"; else echo "NG: 守られるはずのダミーが書き換わりました（settings.json の書き方を確かめてください）"; exit 1; fi
+     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then
+       grep -qF '"permission_denials":[{' "$T/out.json" || { echo "判定できません: 拒否の記録がありません（AI が守られる側に書き込みを試していません）。もう一度実行してください"; exit 2; }
+       echo "OK: 守られるはずのダミーは変わらず、拒否の記録もあります（止まっています）"
+     else echo "NG: 守られるはずのダミーが書き換わりました（settings.json の書き方を確かめてください）"; exit 1; fi
    )
    ```
    - 結果の読み方：`OK` が出れば止まっています。`NG` は、規則が無い・settings.json の JSON が壊れている・規則を `allow` に書いた、などで効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。

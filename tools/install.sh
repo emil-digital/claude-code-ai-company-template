@@ -319,6 +319,7 @@ Claude Code のメインセッションを Root（責任者）にし、企画・
      abs() { local w; w=$(cd "$1" && pwd -W); echo "//$(echo "${w:0:1}" | tr 'A-Z' 'a-z')${w:2}"; }
      # 1) settings.json に、相手のフォルダを絶対パスで指す規則の文字列があるか（読むだけ）
      A="$(abs "$P")"
+     case "$A" in *[][*?{}]*) echo "NG: フォルダの場所に [ ] * ? { } のどれかが含まれています。deny の規則で正しく守れないことがあるので、フォルダ名を変えてください: $P"; exit 1;; esac
      grep -qF "\"Edit($A/**)\"" .claude/settings.json || { echo "NG: settings.json に \"Edit($A/**)\" がありません"; exit 1; }
      # 2) あなたの settings.json の「写し」で本当に止まるかを、新しく作った一時フォルダの中のダミーだけで試す
      #    写しでは、相手のフォルダの場所だけを一時フォルダの中に置き換えます（JSON の壊れや allow への書き間違いも、ここで NG になります）
@@ -331,9 +332,12 @@ Claude Code のメインセッションを Root（責任者）にし、企画・
      printf '%s\n' "${S//"$A/"/"$(abs "$T/partner")/"}" > "$T/company/.claude/settings.json"
      B=$(sha256sum < "$T/partner/dummy.txt")
      cd "$T/company"
-     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --model haiku --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null || true
+     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --model haiku --output-format json --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null > "$T/out.json" 2>/dev/null || true
      if [ "$B" = "$(sha256sum < "$T/free/dummy.txt")" ]; then echo "判定できません: 比較用のダミーも変わっていません（AI が書き込みを試していません）。もう一度実行してください"; exit 2; fi
-     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then echo "OK: 守られるはずのダミーは変わっていません（止まっています）"; else echo "NG: 守られるはずのダミーが書き換わりました（settings.json の書き方を確かめてください）"; exit 1; fi
+     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then
+       grep -qF '"permission_denials":[{' "$T/out.json" || { echo "判定できません: 拒否の記録がありません（AI が守られる側に書き込みを試していません）。もう一度実行してください"; exit 2; }
+       echo "OK: 守られるはずのダミーは変わらず、拒否の記録もあります（止まっています）"
+     else echo "NG: 守られるはずのダミーが書き換わりました（settings.json の書き方を確かめてください）"; exit 1; fi
    )
    ```
    - 結果の読み方：`OK` が出れば止まっています。`NG` は、規則が無い・settings.json の JSON が壊れている・規則を `allow` に書いた、などで効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。
@@ -548,7 +552,7 @@ d6b7c10a284aeaeb5529a9e294765d6cf9404709280692759dd8df791fdb7c57  .claude/agents
 aefa0840b97f68e85617ef041bbc709e31e08127ff489894f2a2a1333961825c  .claude/skills/sync/SKILL.md
 cadbd9faec9920fd2835b3fb91b916b1389dd28e9ecc09f0b48cd0fb060ad528  CLAUDE.md
 3a0eb3180e3279d73bb4f74052b424f916d69176b85a1045032180bea2aa8058  OWNER_INBOX.md
-f075d203963b26bf86b9d8ea25934f1cb3aa139e12067971a3fb3ce289914e86  README.md
+68ed3cc66246073127186955db8d7dcab80f84d2c2aa896eaefa648a544c936a  README.md
 58f53c68afa85df525f359d1a02674d898d0bb2d1e47c6537328d58e1ab220d9  STATUS.md
 d493cc819226e291a9066c4fa39a87a5f44651881d5e0b8e7eeed1bfe3cbcdaa  docs/APPROVALS.md
 b3526286538cc7a0a0f75dd256371f532e4a753c877b59fe66492bf282c0f9c3  docs/BUSINESS_IDEAS.md
