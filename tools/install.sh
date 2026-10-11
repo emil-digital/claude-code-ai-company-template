@@ -308,7 +308,7 @@ Claude Code のメインセッションを Root（責任者）にし、企画・
    - 共有フォルダを作り、settings.json の `//c/CHANGE_ME/shared/partner/**` を、相手社フォルダの**絶対パス**に書き換えます。Windows の `C:\Users\you\shared\partner` なら `//c/Users/you/shared/partner/**` です。
    - `.claude/skills/sync/SKILL.md` の共有フォルダの場所（`../shared/` の行）も、実際の場所に書き換えます。
    - **相対パス（`../shared/partner/**`）では止まりませんでした**（筆者の環境で実測。Claude Code 2026年10月時点）。`Write(...)` の規則も効きません。`Edit(...)` で書いてください。
-5. 書き込みが止まることを、必ず自分で確かめます。
+5. 規則が効いているかを、必ず自分で確かめます（`OK` と出ても、相手のフォルダが守られることの保証ではありません。下の「結果の読み方」を必ず読んでください）。
    - **相手のフォルダには何も書き込みません**（読むだけです）。試すのは、毎回新しく作る一時フォルダ（`mktemp -d`）の中のダミーファイルだけで、終わると（途中で失敗しても）その一時フォルダだけが消えます。
    - Git Bash で `cd` して company フォルダに移動し、`<相手社フォルダ>` を相手のフォルダの場所に書き換えてから、全体を貼り付けて実行します。`claude -p` を1回呼びます。一時フォルダでは、あなたの settings.json の写し（相手のフォルダの場所だけを置き換えたもの）を使います。写しに hooks などの設定があれば、それも動きます。
    ```
@@ -321,7 +321,7 @@ Claude Code のメインセッションを Root（責任者）にし、企画・
      A="$(abs "$P")"
      case "$A" in *[][*?{}]*) echo "NG: フォルダの場所に [ ] * ? { } のどれかが含まれています。deny の規則で正しく守れないことがあるので、フォルダ名を変えてください: $P"; exit 1;; esac
      grep -qF "\"Edit($A/**)\"" .claude/settings.json || { echo "NG: settings.json に \"Edit($A/**)\" がありません"; exit 1; }
-     # 2) あなたの settings.json の「写し」で本当に止まるかを、新しく作った一時フォルダの中のダミーだけで試す
+     # 2) あなたの settings.json の「写し」で Write ツールが止まるかを、新しく作った一時フォルダの中のダミーだけで試す
      #    写しでは、相手のフォルダの場所だけを一時フォルダの中に置き換えます（JSON の壊れや allow への書き間違いも、ここで NG になります）
      T=$(mktemp -d)                         # 毎回新しく作られる空のフォルダ。既存のフォルダは使わない
      trap 'cd / && rm -rf -- "$T"' EXIT     # 終わったら（途中で失敗しても）、この一時フォルダだけを消す
@@ -336,11 +336,11 @@ Claude Code のメインセッションを Root（責任者）にし、企画・
      if [ "$B" = "$(sha256sum < "$T/free/dummy.txt")" ]; then echo "判定できません: 比較用のダミーも変わっていません（AI が書き込みを試していません）。もう一度実行してください"; exit 2; fi
      if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then
        grep -qF '"permission_denials":[{' "$T/out.json" || { echo "判定できません: 拒否の記録がありません（AI が守られる側に書き込みを試していません）。もう一度実行してください"; exit 2; }
-       echo "OK: 守られるはずのダミーは変わらず、拒否の記録もあります（止まっています）"
+       echo "OK: 写しの設定で、AI の Write ツールによるダミーへの書き込みは拒否されました（相手のフォルダが守られる保証ではありません。README の「結果の読み方」を参照）"
      else echo "NG: 守られるはずのダミーが書き換わりました（settings.json の書き方を確かめてください）"; exit 1; fi
    )
    ```
-   - 結果の読み方：`OK` が出れば止まっています。`NG` は、規則が無い・settings.json の JSON が壊れている・規則を `allow` に書いた、などで効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。
+   - 結果の読み方：`OK` は「あなたの settings.json の写しで、AI が Write ツールでダミーに書こうとしたとき、拒否された」という意味です。**相手のフォルダが守られることの保証ではありません。** Bash を自動許可しているときの node などのスクリプト経由の書き込み、対話モード、確認の後で設定を変えた場合は、この確認の範囲外です。拒否の記録がどのファイルについてのものかまでは確かめていません。`NG` は、規則が無い・settings.json の JSON が壊れている・規則を `allow` に書いた、などで効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。
    - Git Bash 用です（`pwd -W` を使うため。Mac・Linux では未確認）。
    - 絶対パスの deny でも、Bash を自動許可していると、node などのスクリプト経由では書き込めました（筆者の環境で実測）。Bash は自動許可しないでください。
 6. `claude` を起動し、「STATUS.md を読んで、最初の企画を探して」と頼みます。
@@ -552,7 +552,7 @@ d6b7c10a284aeaeb5529a9e294765d6cf9404709280692759dd8df791fdb7c57  .claude/agents
 aefa0840b97f68e85617ef041bbc709e31e08127ff489894f2a2a1333961825c  .claude/skills/sync/SKILL.md
 cadbd9faec9920fd2835b3fb91b916b1389dd28e9ecc09f0b48cd0fb060ad528  CLAUDE.md
 3a0eb3180e3279d73bb4f74052b424f916d69176b85a1045032180bea2aa8058  OWNER_INBOX.md
-68ed3cc66246073127186955db8d7dcab80f84d2c2aa896eaefa648a544c936a  README.md
+355977d790639eb7436889ade488bd7db768aff99beb9e94d27ee2f5539e9b6f  README.md
 58f53c68afa85df525f359d1a02674d898d0bb2d1e47c6537328d58e1ab220d9  STATUS.md
 d493cc819226e291a9066c4fa39a87a5f44651881d5e0b8e7eeed1bfe3cbcdaa  docs/APPROVALS.md
 b3526286538cc7a0a0f75dd256371f532e4a753c877b59fe66492bf282c0f9c3  docs/BUSINESS_IDEAS.md
