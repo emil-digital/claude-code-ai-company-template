@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(//c/CHANGE_ME/shared/partner/**)"
+    ]
+  }
+}
