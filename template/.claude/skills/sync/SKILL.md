@@ -19,4 +19,4 @@ description: 2社運用のときに、共有フォルダで相手社と状態を
    - `self/TO_PARTNER.md`：相手社への依頼・連絡（追記する。古い項目は消さず「済」を付ける）
 4. 自社の STATUS.md に「最終同期：日時、気付いた重複や依頼」を1行残す。
 
-`partner/` には書き込まない（.claude/settings.json の deny を絶対パスで設定すれば、技術的にも止まる。README の手順5で確かめること）。
+`partner/` には書き込まない（.claude/settings.json の deny を絶対パスで設定すれば、Write・Edit ツールは止まる。ただし Bash を自動許可していると、スクリプト経由の書き込みは止まらない。README の手順5で確かめること）。

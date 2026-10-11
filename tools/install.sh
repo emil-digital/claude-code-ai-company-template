@@ -183,7 +183,7 @@ description: 2社運用のときに、共有フォルダで相手社と状態を
    - `self/TO_PARTNER.md`：相手社への依頼・連絡（追記する。古い項目は消さず「済」を付ける）
 4. 自社の STATUS.md に「最終同期：日時、気付いた重複や依頼」を1行残す。
 
-`partner/` には書き込まない（.claude/settings.json の deny を絶対パスで設定すれば、技術的にも止まる。README の手順5で確かめること）。
+`partner/` には書き込まない（.claude/settings.json の deny を絶対パスで設定すれば、Write・Edit ツールは止まる。ただし Bash を自動許可していると、スクリプト経由の書き込みは止まらない。README の手順5で確かめること）。
 CC_TEMPLATE_EOF
 mkdir -p "$DEST/."
 cat > "$DEST/CLAUDE.md" <<'CC_TEMPLATE_EOF'
@@ -549,7 +549,7 @@ sha256sum -c --quiet <<'CC_MANIFEST_EOF'
 74f586077fb4e81d9677b7819d7f895745c6b3f5fd9addeb14e5a512582cf6f6  .claude/agents/product-development.md
 d6b7c10a284aeaeb5529a9e294765d6cf9404709280692759dd8df791fdb7c57  .claude/agents/quality-control.md
 31317771a1f20edd6f95b8167d3b154513e55238834d22216a92a5a1d4914950  .claude/settings.json
-aefa0840b97f68e85617ef041bbc709e31e08127ff489894f2a2a1333961825c  .claude/skills/sync/SKILL.md
+e330f256634bc60921d6dfda95139531fd89338908d70ba7bb54cc07dabc83d5  .claude/skills/sync/SKILL.md
 cadbd9faec9920fd2835b3fb91b916b1389dd28e9ecc09f0b48cd0fb060ad528  CLAUDE.md
 3a0eb3180e3279d73bb4f74052b424f916d69176b85a1045032180bea2aa8058  OWNER_INBOX.md
 355977d790639eb7436889ade488bd7db768aff99beb9e94d27ee2f5539e9b6f  README.md
