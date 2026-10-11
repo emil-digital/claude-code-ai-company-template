@@ -46,30 +46,33 @@ bash tools/install.sh company
 2. `.claude/skills/sync/SKILL.md` の共有フォルダの場所（`../shared/`）も、実際の場所に書き換えます。
 3. **本当に止まるかを確かめます。**
    - **相手のフォルダには何も書き込みません**（読むだけです）。試すのは、毎回新しく作る一時フォルダ（`mktemp -d`）の中のダミーファイルだけで、終わると（途中で失敗しても）その一時フォルダだけが消えます。
-   - Git Bash で `cd` して company フォルダに移動し、`<相手のフォルダ>` を相手のフォルダの場所に書き換えてから、全体を貼り付けて実行します。`claude -p` を1回呼びます。
+   - Git Bash で `cd` して company フォルダに移動し、`<相手のフォルダ>` を相手のフォルダの場所に書き換えてから、全体を貼り付けて実行します。`claude -p` を1回呼びます。一時フォルダでは、あなたの settings.json の写し（相手のフォルダの場所だけを置き換えたもの）を使います。写しに hooks などの設定があれば、それも動きます。
    ```
    ( set -eu
      P="<相手のフォルダ>"   # 例: C:/Users/you/shared/partner（このフォルダは読むだけで、何も書きません）
      [ -d "$P" ] || { echo "NG: フォルダが見つかりません: $P"; exit 1; }
+     [ -f .claude/settings.json ] || { echo "NG: company フォルダで実行してください（.claude/settings.json がありません）"; exit 1; }
      abs() { local w; w=$(cd "$1" && pwd -W); echo "//$(echo "${w:0:1}" | tr 'A-Z' 'a-z')${w:2}"; }
-     # 1) company の settings.json に、相手のフォルダを絶対パスで指す規則があるか（読むだけ）
-     R="Edit($(abs "$P")/**)"
-     if grep -qF "\"$R\"" .claude/settings.json; then echo "OK: settings.json に $R があります"; else echo "NG: settings.json に $R がありません"; exit 1; fi
-     # 2) 同じ書き方の規則で本当に止まるかを、新しく作った一時フォルダの中のダミーだけで試す
+     # 1) settings.json に、相手のフォルダを絶対パスで指す規則の文字列があるか（読むだけ）
+     A="$(abs "$P")"
+     grep -qF "\"Edit($A/**)\"" .claude/settings.json || { echo "NG: settings.json に \"Edit($A/**)\" がありません"; exit 1; }
+     # 2) あなたの settings.json の「写し」で本当に止まるかを、新しく作った一時フォルダの中のダミーだけで試す
+     #    写しでは、相手のフォルダの場所だけを一時フォルダの中に置き換えます（JSON の壊れや allow への書き間違いも、ここで NG になります）
      T=$(mktemp -d)                         # 毎回新しく作られる空のフォルダ。既存のフォルダは使わない
      trap 'cd / && rm -rf -- "$T"' EXIT     # 終わったら（途中で失敗しても）、この一時フォルダだけを消す
      mkdir "$T/company" "$T/company/.claude" "$T/partner" "$T/free"
      echo original > "$T/partner/dummy.txt" # 守られるはずのダミー
      echo original > "$T/free/dummy.txt"    # 比較用：守られていないダミー（AI が本当に書こうとしたかの確認）
-     printf '{ "permissions": { "deny": ["Edit(%s/**)"] } }\n' "$(abs "$T/partner")" > "$T/company/.claude/settings.json"
+     S=$(cat .claude/settings.json)
+     printf '%s\n' "${S//"$A/"/"$(abs "$T/partner")/"}" > "$T/company/.claude/settings.json"
      B=$(sha256sum < "$T/partner/dummy.txt")
      cd "$T/company"
-     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null || true
+     claude -p "First use the Read tool on ../free/dummy.txt and ../partner/dummy.txt. Then use the Write tool to overwrite each of them with the text changed. Reply for each file: succeeded or denied." --model haiku --allowedTools "Read,Write,Edit" --permission-mode acceptEdits < /dev/null || true
      if [ "$B" = "$(sha256sum < "$T/free/dummy.txt")" ]; then echo "判定できません: 比較用のダミーも変わっていません（AI が書き込みを試していません）。もう一度実行してください"; exit 2; fi
-     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then echo "OK: 守られるはずのダミーは変わっていません（止まっています）"; else echo "NG: 守られるはずのダミーが書き換わりました（止まっていません）"; exit 1; fi
+     if [ "$B" = "$(sha256sum < "$T/partner/dummy.txt")" ]; then echo "OK: 守られるはずのダミーは変わっていません（止まっています）"; else echo "NG: 守られるはずのダミーが書き換わりました（settings.json の書き方を確かめてください）"; exit 1; fi
    )
    ```
-   - 結果の読み方：`OK` が2行出れば止まっています。`NG` は規則が無いか、効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。
+   - 結果の読み方：`OK` が出れば止まっています。`NG` は、規則が無い・settings.json の JSON が壊れている・規則を `allow` に書いた、などで効いていません。`判定できません` は AI が書き込みを試さなかったときなので、もう一度実行してください。
    - Git Bash 用です（`pwd -W` を使うため。Mac・Linux では未確認）。
 
 ## できること・できないこと
